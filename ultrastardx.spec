@@ -2,7 +2,7 @@
 
 Name:           ultrastardx
 Version:        1.1.1
-Release:        0%{?prever:.3.%{prever}}%{?dist}
+Release:        0%{?prever:.4.%{prever}}%{?dist}
 Summary:        Karaoke game inspired by a popular commercial karaoke game
 
 Group:          Amusements/Games
@@ -21,7 +21,7 @@ Requires:       bitstream-vera-fonts freefont
 BuildRequires:  fpc desktop-file-utils 
 BuildRequires:  ffmpeg-devel freetype-devel libpng-devel libprojectM-devel 
 BuildRequires:  portaudio-devel SDL-devel SDL_image-devel sqlite-devel
-
+BuildRequires:  lzma
 
 %description
 Karaoke game inspired by a popular commercial karaoke game. It allows up to six
@@ -92,6 +92,9 @@ fi
 
 
 %changelog
+* Sat Mar 07 2009 Felix Kaechele <felix at fetzig dot org> - 1.1.1-0.4.20090303
+- F9 seems to require lzma during build
+
 * Tue Mar 03 2009 Felix Kaechele <felix at fetzig dot org> - 1.1.1-0.3.20090303
 - new snapshot; now builds in rawhide
 
