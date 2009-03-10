@@ -2,7 +2,7 @@
 
 Name:           ultrastardx
 Version:        1.1.1
-Release:        0%{?prever:.3.%{prever}}%{?dist}
+Release:        0%{?prever:.4.%{prever}}%{?dist}
 Summary:        Karaoke game inspired by a popular commercial karaoke game
 
 Group:          Amusements/Games
@@ -16,7 +16,7 @@ Source100:      ultrastardx-snapshot.sh
 Patch0:         ultrastardx-desktop.patch
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
-Requires:       bitstream-vera-fonts freefont
+Requires:       bitstream-vera-sans-fonts freefont
 
 BuildRequires:  fpc desktop-file-utils 
 BuildRequires:  ffmpeg-devel freetype-devel libpng-devel libprojectM-devel 
@@ -92,6 +92,9 @@ fi
 
 
 %changelog
+* Tue Mar 10 2009 Felix Kaechele <felix at fetzig dot org> - 1.1.1-0.4.20090303
+- change package name for bitstream vera
+
 * Tue Mar 03 2009 Felix Kaechele <felix at fetzig dot org> - 1.1.1-0.3.20090303
 - new snapshot; now builds in rawhide
 
