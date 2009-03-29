@@ -2,7 +2,7 @@
 
 Name:           ultrastardx
 Version:        1.1.1
-Release:        0%{?prever:.4.%{prever}}%{?dist}
+Release:        1%{?prever:.4.%{prever}}%{?dist}
 Summary:        Karaoke game inspired by a popular commercial karaoke game
 
 Group:          Amusements/Games
@@ -92,6 +92,9 @@ fi
 
 
 %changelog
+* Sun Mar 29 2009 Thorsten Leemhuis <fedora [AT] leemhuis [DOT] info> - 1.1.1-1.4.20090303
+- rebuild for new F11 features
+
 * Tue Mar 10 2009 Felix Kaechele <felix at fetzig dot org> - 1.1.1-0.4.20090303
 - change package name for bitstream vera
 
