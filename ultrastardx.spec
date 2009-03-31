@@ -2,7 +2,7 @@
 
 Name:           ultrastardx
 Version:        1.1.1
-Release:        1%{?prever:.4.%{prever}}%{?dist}
+Release:        1%{?prever:.5.%{prever}}%{?dist}
 Summary:        Karaoke game inspired by a popular commercial karaoke game
 
 Group:          Amusements/Games
@@ -16,7 +16,7 @@ Source100:      ultrastardx-snapshot.sh
 Patch0:         ultrastardx-desktop.patch
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
-Requires:       bitstream-vera-sans-fonts freefont
+Requires:       bitstream-vera-sans-fonts gnu-free-sans-fonts
 
 BuildRequires:  fpc desktop-file-utils 
 BuildRequires:  ffmpeg-devel freetype-devel libpng-devel libprojectM-devel 
@@ -92,6 +92,9 @@ fi
 
 
 %changelog
+* Tue Mar 31 2009 Felix Kaechele <felix at fetzig dot org> - 1.1.1-1.5.20090303
+- fixed font deps
+
 * Sun Mar 29 2009 Thorsten Leemhuis <fedora [AT] leemhuis [DOT] info> - 1.1.1-1.4.20090303
 - rebuild for new F11 features
 
