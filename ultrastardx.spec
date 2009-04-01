@@ -85,7 +85,7 @@ fi
 
 %files
 %defattr(-,root,root,-)
-%doc AUTHORS.txt ChangeLog.german.txt ChangeLog.txt COPYING.txt COPYRIGHT.txt
+%doc AUTHORS.txt ChangeLog.GERMAN.txt ChangeLog.txt COPYING.txt COPYRIGHT.txt
 %doc README.txt
 %{_bindir}/%{name}
 %{_datadir}/%{name}
