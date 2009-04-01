@@ -1,0 +1,882 @@
+Index: src/lib/ffmpeg/avformat.pas
+===================================================================
+--- src/lib/ffmpeg/avformat.pas	(Revision 1657)
++++ src/lib/ffmpeg/avformat.pas	(Arbeitskopie)
+@@ -27,7 +27,7 @@
+ (*
+  * Conversion of libavformat/avformat.h
+  * Min. version: 50.5.0 , revision 6577,  Sat Oct 7 15:30:46 2006 UTC
+- * Max. version: 52.25.0, revision 16986, Wed Feb 4 05:56:39 2009 UTC 
++ * Max. version: 52.32.0, revision 18286, Tue Mar 31 22:29:24 2009 UTC  
+  *)
+ 
+ unit avformat;
+@@ -60,7 +60,7 @@
+ const
+   (* Max. supported version by this header *)
+   LIBAVFORMAT_MAX_VERSION_MAJOR   = 52;
+-  LIBAVFORMAT_MAX_VERSION_MINOR   = 25;
++  LIBAVFORMAT_MAX_VERSION_MINOR   = 32;
+   LIBAVFORMAT_MAX_VERSION_RELEASE = 0;
+   LIBAVFORMAT_MAX_VERSION = (LIBAVFORMAT_MAX_VERSION_MAJOR * VERSION_MAJOR) +
+                             (LIBAVFORMAT_MAX_VERSION_MINOR * VERSION_MINOR) +
+@@ -653,6 +653,18 @@
+     cur_len: cint;
+     cur_pkt: TAVPacket;
+     {$IFEND}
++	
++	{$IF LIBAVFORMAT_VERSION > 52030000} // > 52.30.0
++    // Timestamp generation support:
++    (**
++     * Timestamp corresponding to the last dts sync point.
++     *
++     * Initialized when AVCodecParserContext.dts_sync_point >= 0 and
++     * a DTS is received from the underlying container. Otherwise set to
++     * AV_NOPTS_VALUE by default.
++     *)
++    reference_dts: cint64;
++    {$IFEND}
+   end;
+ 
+  (**
+Index: src/lib/ffmpeg/swscale.pas
+===================================================================
+--- src/lib/ffmpeg/swscale.pas	(Revision 1657)
++++ src/lib/ffmpeg/swscale.pas	(Arbeitskopie)
+@@ -44,13 +44,14 @@
+ 
+ uses
+   ctypes,
++  avcodec,
+   avutil,
+   UConfig;
+ 
+ const
+   (* Max. supported version by this header *)
+   LIBSWSCALE_MAX_VERSION_MAJOR   = 0;
+-  LIBSWSCALE_MAX_VERSION_MINOR   = 6;
++  LIBSWSCALE_MAX_VERSION_MINOR   = 7;
+   LIBSWSCALE_MAX_VERSION_RELEASE = 1;
+   LIBSWSCALE_MAX_VERSION = (LIBSWSCALE_MAX_VERSION_MAJOR * VERSION_MAJOR) +
+                            (LIBSWSCALE_MAX_VERSION_MINOR * VERSION_MINOR) +
+@@ -130,8 +131,8 @@
+   // coeffs cannot be shared between vectors
+   PSwsVector = ^TSwsVector;
+   TSwsVector = record
+-    coeff: PCdouble;
+-    length: cint;
++    coeff: PCdouble;    ///< pointer to the list of coefficients
++    length: cint;       ///< number of coefficients in the vector
+   end;
+ 
+   // vectors can be shared
+@@ -152,13 +153,52 @@
+ procedure sws_freeContext(swsContext: PSwsContext);
+   cdecl; external sw__scale;
+ 
++(**
++ * Allocates and returns a SwsContext. You need it to perform
++ * scaling/conversion operations using sws_scale().
++ *
++ * @param srcW the width of the source image
++ * @param srcH the height of the source image
++ * @param srcFormat the source image format
++ * @param dstW the width of the destination image
++ * @param dstH the height of the destination image
++ * @param dstFormat the destination image format
++ * @param flags specify which algorithm and options to use for rescaling
++ * @return a pointer to an allocated context, or NULL in case of error
++ *)
+ function sws_getContext(srcW: cint; srcH: cint; srcFormat: TAVPixelFormat;
+               dstW: cint; dstH: cint; dstFormat: TAVPixelFormat; flags: cint;
+               srcFilter: PSwsFilter; dstFilter: PSwsFilter; param: PCdouble): PSwsContext;
+   cdecl; external sw__scale;
+-function sws_scale(context: PSwsContext; src: PPCuint8Array; srcStride: PCintArray; srcSliceY: cint; srcSliceH: cint;
++
++(**
++ * Scales the image slice in \p srcSlice and puts the resulting scaled
++ * slice in the image in \p dst. A slice is a sequence of consecutive
++ * rows in an image.
++ *
++ * @param context   the scaling context previously created with
++ *                  sws_getContext()
++ * @param srcSlice  the array containing the pointers to the planes of
++ *                  the source slice
++ * @param srcStride the array containing the strides for each plane of
++ *                  the source image
++ * @param srcSliceY the position in the source image of the slice to
++ *                  process, that is the number (counted starting from
++ *                  zero) in the image of the first row of the slice
++ * @param srcSliceH the height of the source slice, that is the number
++ *                  of rows in the slice
++ * @param dst       the array containing the pointers to the planes of
++ *                  the destination image
++ * @param dstStride the array containing the strides for each plane of
++ *                  the destination image
++ * @return          the height of the output slice
++ *)
++function sws_scale(context: PSwsContext; srcSlice: PPCuint8Array; srcStride: PCintArray; srcSliceY: cint; srcSliceH: cint;
+               dst: PPCuint8Array; dstStride: PCintArray): cint;
+   cdecl; external sw__scale;
++(**
++ * @deprecated Use sws_scale() instead.
++ *)
+ function sws_scale_ordered(context: PSwsContext; src: PPCuint8Array; srcStride: PCintArray; srcSliceY: cint;
+               srcSliceH: cint; dst: PPCuint8Array; dstStride: PCintArray): cint;
+   cdecl; external sw__scale; deprecated;
+@@ -169,14 +209,38 @@
+ function sws_getColorspaceDetails(c: PSwsContext; var inv_table: PQuadCintArray; var srcRange: cint; var table: PQuadCintArray; var dstRange: cint;
+               var brightness: cint; var contrast: cint; var saturation: cint): cint;
+   cdecl; external sw__scale;
++
++(**
++ * Returns a normalized Gaussian curve used to filter stuff
++ * quality=3 is high quality, lower is lower quality.
++ *)
+ function sws_getGaussianVec(variance: cdouble; quality: cdouble): PSwsVector;
+   cdecl; external sw__scale;
++
++(**
++ * Allocates and returns a vector with \p length coefficients, all
++ * with the same value \p c.
++ *)
+ function sws_getConstVec(c: cdouble; length: cint): PSwsVector;
+   cdecl; external sw__scale;
++
++(**
++ * Allocates and returns a vector with just one coefficient, with
++ * value 1.0.
++ *)
+ function sws_getIdentityVec: PSwsVector;
+   cdecl; external sw__scale;
++
++(**
++ * Scales all the coefficients of \p a by the \p scalar value.
++ *)
+ procedure sws_scaleVec(a: PSwsVector; scalar: cdouble);
+   cdecl; external sw__scale;
++
++(**
++ * Scales all the coefficients of \p a so that their sum equals \p
++ * height."
++ *)
+ procedure sws_normalizeVec(a: PSwsVector; height: cdouble);
+   cdecl; external sw__scale;
+ procedure sws_convVec(a: PSwsVector; b: PSwsVector);
+@@ -187,23 +251,53 @@
+   cdecl; external sw__scale;
+ procedure sws_shiftVec(a: PSwsVector; shift: cint);
+   cdecl; external sw__scale;
++
++(**
++ * Allocates and returns a clone of the vector \p a, that is a vector
++ * with the same coefficients as \p a.
++ *)
+ function sws_cloneVec(a: PSwsVector): PSwsVector;
+   cdecl; external sw__scale;
+ 
++(**
++ * @deprecated Use sws_printVec2() instead.
++ *)
+ procedure sws_printVec(a: PSwsVector);
+   cdecl; external sw__scale;
++
++(**
++ * Prints with av_log() a textual representation of the vector \p a
++ * if \p log_level <= av_log_level.
++ *)
++
++procedure sws_printVec2(a: PSwsVector; log_ctx: TAVClass; log_level: cint);
++  cdecl; external sw__scale;
++
+ procedure sws_freeVec(a: PSwsVector);
+   cdecl; external sw__scale;
+ 
+-function sws_getDefaultFilter(lumaGBlur: cfloat; chromaGBlur: cfloat; lumaSarpen: cfloat; chromaSharpen: cfloat; chromaHShift: cfloat;
++function sws_getDefaultFilter(lumaGBlur: cfloat; chromaGBlur: cfloat; lumaSharpen: cfloat; chromaSharpen: cfloat; chromaHShift: cfloat;
+               chromaVShift: cfloat; verbose: cint): PSwsFilter;
+   cdecl; external sw__scale;
+ procedure sws_freeFilter(filter: PSwsFilter);
+   cdecl; external sw__scale;
+ 
++(**
++ * Checks if \p context can be reused, otherwise reallocates a new
++ * one.
++ *
++ * If \p context is NULL, just calls sws_getContext() to get a new
++ * context. Otherwise, checks if the parameters are the ones already
++ * saved in \p context. If that is the case, returns the current
++ * context. Otherwise, frees \p context and gets a new context with
++ * the new parameters.
++ *
++ * Be warned that \p srcFilter and \p dstFilter are not checked, they
++ * are assumed to remain the same.
++ *)
+ function sws_getCachedContext(context: PSwsContext;
+-              srcW: cint; srcH: cint; srcFormat: cint;
+-              dstW: cint; dstH: cint; dstFormat: cint; flags: cint;
++              srcW: cint; srcH: cint; srcFormat: TAVPixelFormat;
++              dstW: cint; dstH: cint; dstFormat: TAVPixelFormat; flags: cint;
+               srcFilter: PSwsFilter; dstFilter: PSwsFilter; param: PCdouble): PSwsContext;
+   cdecl; external sw__scale;
+ 
+Index: src/lib/ffmpeg/avcodec.pas
+===================================================================
+--- src/lib/ffmpeg/avcodec.pas	(Revision 1657)
++++ src/lib/ffmpeg/avcodec.pas	(Arbeitskopie)
+@@ -27,7 +27,7 @@
+ (*
+  * Conversion of libavcodec/avcodec.h
+  * Min. version: 51.16.0, revision 6577, Sat Oct 7 15:30:46 2006 UTC 
+- * Max. version: 52.11.0, revision 16912, Sun Feb 1 02:00:19 2009 UTC 
++ * Max. version: 52.22.3, revision 18286, Tue Mar 31 22:29:24 2009 UTC 
+  *)
+ 
+ unit avcodec;
+@@ -60,8 +60,8 @@
+ const
+   (* Max. supported version by this header *)
+   LIBAVCODEC_MAX_VERSION_MAJOR   = 52;
+-  LIBAVCODEC_MAX_VERSION_MINOR   = 11;
+-  LIBAVCODEC_MAX_VERSION_RELEASE = 0;
++  LIBAVCODEC_MAX_VERSION_MINOR   = 22;
++  LIBAVCODEC_MAX_VERSION_RELEASE = 3;
+   LIBAVCODEC_MAX_VERSION = (LIBAVCODEC_MAX_VERSION_MAJOR * VERSION_MAJOR) +
+                            (LIBAVCODEC_MAX_VERSION_MINOR * VERSION_MINOR) +
+                            (LIBAVCODEC_MAX_VERSION_RELEASE * VERSION_RELEASE);
+@@ -233,6 +233,9 @@
+     CODEC_ID_MOTIONPIXELS,
+     CODEC_ID_TGV,
+     CODEC_ID_TGQ,
++	CODEC_ID_TQI,
++	CODEC_ID_AURA,
++	CODEC_ID_AURA2,
+ 
+     //* various PCM "codecs" */
+     CODEC_ID_PCM_S16LE= $10000,
+@@ -354,6 +357,8 @@
+     CODEC_ID_EAC3,
+     CODEC_ID_SIPR,
+     CODEC_ID_MP1,
++	CODEC_ID_TWINVQ,
++	CODEC_ID_TRUEHD,
+ 
+     //* subtitle codecs */
+     CODEC_ID_DVD_SUBTITLE= $17000,
+@@ -753,6 +758,7 @@
+      * is this picture used as reference
+      * The values for this are the same as the MpegEncContext.picture_structure
+      * variable, that is 1->top field, 2->bottom field, 3->frame/both fields.
++	 * Set to 4 for delayed, non-reference frames.\
+      * - encoding: unused
+      * - decoding: Set by libavcodec. (before get_buffer() call)).
+      *)
+@@ -886,7 +892,17 @@
+      *)
+     reordered_opaque: cint64;
+     {$IFEND}
+-
++	
++	{$IF LIBAVCODEC_VERSION >= 52021000} // 52.21.0
++    (**
++     * hardware accelerator private data (FFmpeg allocated)
++     * - encoding: unused
++     * - decoding: Set by libavcodec
++     *)
++     hwaccel_data_private: pointer;
++	 hwaccel_picture_private: pointer;
++    {$IFEND}
++	
+     {$IF LIBAVCODEC_VERSION >= 51070000} // 51.70.0
+     (**
+      * Bits per sample/pixel of internal libavcodec pixel/sample format.
+@@ -928,6 +944,40 @@
+      *)
+     rc_min_vbv_overflow_use: cfloat;
+     {$IFEND}
++	
++	{$IF LIBAVCODEC_VERSION >= 52019000} // 52.19.0
++    (**
++     * Hardware accelerator in use
++     * - encoding: unused.
++     * - decoding: Set by libavcodec
++     *)
++    hwaccel: pointer;
++	{$IFEND}
++	
++	{$IF LIBAVCODEC_VERSION >= 52020000} // 52.20.0
++    (**
++     * For some codecs, the time base is closer to the field rate than the frame rate.
++     * Most notably, H.264 and MPEG-2 specify time_base as half of frame duration
++     * if no telecine is used ...
++     *
++     * Set to time_base ticks per frame. Default 1, e.g., H.264/MPEG-2 set it to 2.
++     *)
++    ticks_per_frame: cint;
++	{$IFEND}
++	
++	{$IF LIBAVCODEC_VERSION >= 52021000} // 52.21.0
++    (**
++     * Hardware accelerator context.
++     * For some hardware accelerators, a global context needs to be
++     * provided by the user. In that case, this holds display-dependent
++     * data FFmpeg cannot instantiate itself. Please refer to the
++     * FFmpeg HW accelerator documentation to know how to fill this
++     * is. e.g. for VA API, this is a struct vaapi_context.
++     * - encoding: unused
++     * - decoding: Set by user
++     *)
++    hwaccel_context: pointer;
++	{$IFEND}
+   end;
+ 
+ const
+@@ -1273,6 +1323,13 @@
+      * decoder to draw a horizontal band. It improves cache usage. Not
+      * all codecs can do that. You must check the codec capabilities
+      * beforehand.
++     * The function is also used by hardware acceleration APIs.
++     * It is called at least once during frame decoding to pass
++     * the data needed for hardware render.
++     * In that mode instead of pixel data, AVFrame points to
++     * a structure specific to the acceleration API. The application
++     * reads the structure and can change some fields to indicate progress
++     * or mark state.
+      * - encoding: unused
+      * - decoding: Set by user.
+      * @param height the height of the slice
+@@ -1505,7 +1562,8 @@
+     release_buffer: procedure (c: PAVCodecContext; pic: PAVFrame); cdecl;
+ 
+     (**
+-     * If 1 the stream has a 1 frame delay during decoding.
++     * Size of the frame reordering buffer in the decoder.
++     * For MPEG-2 it is 1 IPB or 0 low delay IP.
+      * - encoding: Set by libavcodec.
+      * - decoding: Set by libavcodec.
+      *)
+@@ -2511,7 +2569,102 @@
+     {$IFEND}
+   end;
+ 
++type
+ (**
++ * AVHWAccel.
++ *)
++ PAVHWAccel = ^TAVHWAccel;
++ TAVHWAccel = record
++    (**
++     * Name of the hardware accelerated codec.
++     * The name is globally unique among encoders and among decoders (but an
++     * encoder and a decoder can share the same name).
++     *)
++    name: PAnsiChar;
++
++    (**
++     * Type of codec implemented by the hardware accelerator.
++     *
++     * See CODEC_TYPE_xxx
++     *)
++    type_: TCodecType;
++
++    (**
++     * Codec implemented by the hardware accelerator.
++     *
++     * See CODEC_ID_xxx
++     *)
++    id: TCodecID;
++
++    (**
++     * Supported pixel format.
++     *
++     * Only hardware accelerated formats are supported here.
++     *)
++    pix_fmt: {const} PAVPixelFormat; 
++
++    (**
++     * Hardware accelerated codec capabilities.
++     * see FF_HWACCEL_CODEC_CAP_*
++     *)
++    capabilities: cint;
++
++    next: PAVCodec;
++
++    (**
++     * Called at the beginning of each frame or field picture.
++     *
++     * Meaningful frame information (codec specific) is guaranteed to
++     * be parsed at this point. This function is mandatory.
++     *
++     * Note that \p buf can be NULL along with \p buf_size set to 0.
++     * Otherwise, this means the whole frame is available at this point.
++     *
++     * @param avctx the codec context
++     * @param buf the frame data buffer base
++     * @param buf_size the size of the frame in bytes
++     * @return zero if successful, a negative value otherwise
++     *)
++	start_frame: function (avctx: PAVCodecContext; buf: PByteArray; buf_size: cint): cint; cdecl;
++
++    (**
++     * Callback for each slice.
++     *
++     * Meaningful slice information (codec specific) is guaranteed to
++     * be parsed at this point. This function is mandatory.
++     *
++     * @param avctx the codec context
++     * @param buf the slice data buffer base
++     * @param buf_size the size of the slice in bytes
++     * @return zero if successful, a negative value otherwise
++     *)
++	decode_slice: function (avctx: PAVCodecContext; buf: PByteArray; buf_size: cint): cint; cdecl;
++
++    (**
++     * Called at the end of each frame or field picture.
++     *
++     * The whole picture is parsed at this point and can now be sent
++     * to the hardware accelerator. This function is mandatory.
++     *
++     * @param avctx the codec context
++     * @return zero if successful, a negative value otherwise
++     *)
++	end_frame: function (avctx: PAVCodecContext): cint; cdecl;
++	
++	{$IF LIBAVCODEC_VERSION < 52021000} // < 52.21.0
++    (**
++     * Size of HW accelerator private data.
++     *
++     * Private data is allocated with av_malloc() before
++     * AVCodecContext::get_buffer() and deallocated after
++     * AVCodecContext::release_buffer().
++     *)
++    priv_data_size: cint;
++	{$IFEND}
++	
++  end;
++
++(**
+  * four components are given, that's all.
+  * the last component is alpha
+  *)
+@@ -2603,6 +2756,30 @@
+ 
+ function audio_resample_init (output_channels: cint; input_channels: cint;
+                               output_rate: cint; input_rate: cint): PReSampleContext;
++  cdecl; external av__codec; deprecated;
++
++
++(**
++ *  Initializes audio resampling context
++ *
++ * @param output_channels  number of output channels
++ * @param input_channels   number of input channels
++ * @param output_rate      output sample rate
++ * @param input_rate       input sample rate
++ * @param sample_fmt_out   requested output sample format
++ * @param sample_fmt_in    input sample format
++ * @param filter_length    length of each FIR filter in the filterbank relative to the cutoff freq
++ * @param log2_phase_count log2 of the number of entries in the polyphase filterbank
++ * @param linear           If 1 then the used FIR filter will be linearly interpolated
++                           between the 2 closest, if 0 the closest will be used
++ * @param cutoff           cutoff frequency, 1.0 corresponds to half the output sampling rate
++ * @return allocated ReSampleContext, NULL if error occured
++ *)
++function av_audio_resample_init (output_channels: cint; input_channels: cint;
++                                 output_rate: cint; input_rate: cint;
++								 sample_fmt_out: TSampleFormat; sample_fmt_in: TSampleFormat;
++								 filter_length: cint; log2_phase_count: cint;
++								 linear: cint; cutoff: cdouble): PReSampleContext;
+   cdecl; external av__codec;
+ 
+ function audio_resample (s: PReSampleContext; output: PSmallint; input: PSmallint; nb_samples: cint): cint;
+@@ -2611,15 +2788,44 @@
+ procedure audio_resample_close (s: PReSampleContext);
+   cdecl; external av__codec;
+ 
+-
++(**
++ * Initializes an audio resampler.
++ * Note, if either rate is not an integer then simply scale both rates up so they are.
++ * @param filter_length length of each FIR filter in the filterbank relative to the cutoff freq
++ * @param log2_phase_count log2 of the number of entries in the polyphase filterbank
++ * @param linear If 1 then the used FIR filter will be linearly interpolated
++                 between the 2 closest, if 0 the closest will be used
++ * @param cutoff cutoff frequency, 1.0 corresponds to half the output sampling rate
++ *)
+ function av_resample_init (out_rate: cint; in_rate: cint; filter_length: cint;
+                            log2_phase_count: cint; linear: cint; cutoff: cdouble): PAVResampleContext;
+   cdecl; external av__codec;
+ 
++(**
++ * resamples.
++ * @param src an array of unconsumed samples
++ * @param consumed the number of samples of src which have been consumed are returned here
++ * @param src_size the number of unconsumed samples available
++ * @param dst_size the amount of space in samples available in dst
++ * @param update_ctx If this is 0 then the context will not be modified, that way several channels can be resampled with the same context.
++ * @return the number of samples written in dst or -1 if an error occurred
++ *)
+ function av_resample (c: PAVResampleContext; dst: PSmallint; src: PSmallint; var consumed: cint;
+                       src_size: cint; dst_size: cint; update_ctx: cint): cint;
+   cdecl; external av__codec;
+ 
++(**
++ * Compensates samplerate/timestamp drift. The compensation is done by changing
++ * the resampler parameters, so no audible clicks or similar distortions occur
++ * @param compensation_distance distance in output samples over which the compensation should be performed
++ * @param sample_delta number of output samples which should be output less
++ *
++ * example: av_resample_compensate(c, 10, 500)
++ * here instead of 510 samples only 500 samples would be output
++ *
++ * note, due to rounding the actual compensation might be slightly different,
++ * especially if the compensation_distance is large and the in_rate used during init is small
++ *)
+ procedure av_resample_compensate (c: PAVResampleContext; sample_delta: cint;
+                                   compensation_distance: cint);
+   cdecl; external av__codec;
+@@ -2692,6 +2898,7 @@
+  * If a planar format is specified, several pointers will be set pointing to
+  * the different picture planes and the line sizes of the different planes
+  * will be stored in the lines_sizes array.
++ * Call with ptr == NULL to get the required size for the ptr buffer.
+  *
+  * @param picture AVPicture whose fields are to be filled in
+  * @param ptr Buffer which will contain or contains the actual image data
+@@ -2712,11 +2919,14 @@
+ (**
+  * Calculate the size in bytes that a picture of the given width and height
+  * would occupy if stored in the given picture format.
++ * Note that this returns the size of a compact representation as generated
++ * by avpicture_layout, which can be smaller than the size required for e.g.
++ * avpicture_fill.
+  *
+  * @param pix_fmt the given picture format
+  * @param width the width of the image
+  * @param height the height of the image
+- * @return Image data size in bytes
++ * @return Image data size in bytes or -1 on error (e.g. too large dimensions).
+  *)
+ function avpicture_get_size (pix_fmt: TAVPixelFormat; width: cint; height: cint): cint;
+   cdecl; external av__codec;
+@@ -2730,6 +2940,17 @@
+ procedure avcodec_set_dimensions(s: PAVCodecContext; width: cint; height: cint);
+   cdecl; external av__codec;
+ 
++(**
++ * Returns the pixel format corresponding to the name \p name.
++ *
++ * If there is no pixel format with name \p name, then looks for a
++ * pixel format with the name corresponding to the native endian
++ * format of \p name.
++ * For example in a little-endian system, first looks for "gray16",
++ * then for "gray16le".
++ *
++ * Finally if no pixel format has been found, returns \c PIX_FMT_NONE.
++ *)
+ function avcodec_get_pix_fmt(name: {const} PAnsiChar): TAVPixelFormat;
+   cdecl; external av__codec;
+ 
+@@ -2851,6 +3072,11 @@
+ }
+ {$IFEND}
+ 
++(**
++ * If c is NULL, returns the first registered codec,
++ * if c is non-NULL, returns the next registered codec after c,
++ * or NULL if c is the last one.
++ *)
+ {$IF LIBAVCODEC_VERSION >= 51049000} // 51.49.0
+ function av_codec_next(c: PAVCodec): PAVCodec;
+   cdecl; external av__codec;
+@@ -2882,9 +3108,13 @@
+  *
+  * @see avcodec_init()
+  *)
++{$IF LIBAVCODEC_VERSION >= 52014000} // 52.14.00
++procedure avcodec_register(codec: PAVCodec);
++  cdecl; external av__codec; deprecated;
++{$ELSE}
+ procedure register_avcodec(codec: PAVCodec);
+-  cdecl; external av__codec;
+-
++  cdecl; external av__codec; deprecated;
++{$IFEND}
+ (**
+  * Finds a registered encoder with a matching codec ID.
+  *
+@@ -3207,7 +3437,7 @@
+  * which formats you want to support, by using the individual registration
+  * functions.
+  *
+- * @see register_avcodec
++ * @see avcodec_register
+  * @see av_register_codec_parser
+  * @see av_register_bitstream_filter
+  *)
+@@ -3271,6 +3501,15 @@
+     next_frame_offset: cint64; (* offset of the next frame *)
+     (* video info *)
+     pict_type: cint; (* XXX: put it back in AVCodecContext *)
++	(**
++     * This field is used for proper frame duration computation in lavf.
++     * It signals, how much longer the frame duration of the current frame
++     * is compared to normal frame duration.
++     *
++     * frame_duration = (1 + repeat_pict) * time_base
++     *
++     * It is used by codecs like H.264 to display telecined material.
++     *)
+     repeat_pict: cint; (* XXX: put it back in AVCodecContext *)
+     pts: cint64;     (* pts of the current frame *)
+     dts: cint64;     (* dts of the current frame *)
+@@ -3293,6 +3532,98 @@
+     {$IF LIBAVCODEC_VERSION >= 51057001} // 51.57.1
+     cur_frame_end: array [0..AV_PARSER_PTS_NB - 1] of cint64;
+     {$IFEND}
++
++	{$IF LIBAVCODEC_VERSION >= 52016000} // 52.16.0
++    (*!
++     * Set by parser to 1 for key frames and 0 for non-key frames.
++     * It is initialized to -1, so if the parser doesn't set this flag,
++     * old-style fallback using FF_I_TYPE picture type as key frames
++     * will be used.
++     *)
++
++    key_frame: cint;
++	{$IFEND}
++
++	{$IF LIBAVCODEC_VERSION >= 52018000} // 52.18.0
++    (**
++     * Time difference in stream time base units from the pts of this
++     * packet to the point at which the output from the decoder has converged
++     * independent from the availability of previous frames. That is, the
++     * frames are virtually identical no matter if decoding started from
++     * the very first frame or from this keyframe.
++     * Is AV_NOPTS_VALUE if unknown.
++     * This field is not the display duration of the current frame.
++     *
++     * The purpose of this field is to allow seeking in streams that have no
++     * keyframes in the conventional sense. It corresponds to the
++     * recovery point SEI in H.264 and match_time_delta in NUT. It is also
++     * essential for some types of subtitle streams to ensure that all
++     * subtitles are correctly displayed after seeking.
++     *)
++    convergence_duration: cint64;
++	{$IFEND}
++	
++	{$IF LIBAVCODEC_VERSION >= 52019000} // 52.19.0
++    // Timestamp generation support:
++    (**
++     * Synchronization point for start of timestamp generation.
++     *
++     * Set to >0 for sync point, 0 for no sync point and <0 for undefined
++     * (default).
++     *
++     * For example, this corresponds to presence of H.264 buffering period
++     * SEI message.
++     *)
++    dts_sync_point: cint;
++
++    (**
++     * Offset of the current timestamp against last timestamp sync point in
++     * units of AVCodecContext.time_base.
++     *
++     * Set to INT_MIN when dts_sync_point unused. Otherwise, it must
++     * contain a valid timestamp offset.
++     *
++     * Note that the timestamp of sync point has usually a nonzero
++     * dts_ref_dts_delta, which refers to the previous sync point. Offset of
++     * the next frame after timestamp sync point will be usually 1.
++     *
++     * For example, this corresponds to H.264 cpb_removal_delay.
++     *)
++    dts_ref_dts_delta: cint;
++
++    (**
++     * Presentation delay of current frame in units of AVCodecContext.time_base.
++     *
++     * Set to INT_MIN when dts_sync_point unused. Otherwise, it must
++     * contain valid non-negative timestamp delta (presentation time of a frame
++     * must not lie in the past).
++     *
++     * This delay represents the difference between decoding and presentation
++     * time of the frame.
++     *
++     * For example, this corresponds to H.264 dpb_output_delay.
++     *)
++    pts_dts_delta: cint;
++	{$IFEND}
++	
++	{$IF LIBAVCODEC_VERSION >= 52019000} // 52.19.0
++	(**
++     * Position of the packet in file.
++     *
++     * Analogous to cur_frame_pts/dts
++     *)
++    cur_frame_pos: array [0..AV_PARSER_PTS_NB - 1] of cint64;
++
++    (**
++     * Byte position of currently parsed frame in stream.
++     *)
++    pos: cint64;
++
++    (**
++     * Previous frame byte position.
++     *)
++    last_pos: cint64;
++	{$IFEND}
+   end;
+ 
+   TAVCodecParser = record
+@@ -3332,11 +3663,47 @@
+                   poutbuf: PPointer; poutbuf_size: PCint;
+                   buf: {const} PByteArray; buf_size: cint;
+                   pts: cint64; dts: cint64): cint;
++  cdecl; external av__codec; deprecated;
++(**
++ * Parse a packet.
++ *
++ * @param s             parser context.
++ * @param avctx         codec context.
++ * @param poutbuf       set to pointer to parsed buffer or NULL if not yet finished.
++ * @param poutbuf_size  set to size of parsed buffer or zero if not yet finished.
++ * @param buf           input buffer.
++ * @param buf_size      input length, to signal EOF, this should be 0 (so that the last frame can be output).
++ * @param pts           input presentation timestamp.
++ * @param dts           input decoding timestamp.
++ * @param pos           input byte position in stream.
++ * @return the number of bytes of the input bitstream used.
++ *
++ * Example:
++ * @code
++ *   while(in_len){
++ *       len = av_parser_parse2(myparser, AVCodecContext, &data, &size,
++ *                                        in_data, in_len,
++ *                                        pts, dts, pos);
++ *       in_data += len;
++ *       in_len  -= len;
++ *
++ *       if(size)
++ *          decode_frame(data, size);
++ *   }
++ * @endcode
++ *)
++function av_parser_parse2(s: PAVCodecParserContext;
++                  avctx: PAVCodecContext;
++                  poutbuf: PPointer; poutbuf_size: PCint;
++                  buf: {const} PByteArray; buf_size: cint;
++                  pts: cint64; dts: cint64;
++				  pos: cint64): cint;
+   cdecl; external av__codec;
++ 
+ function av_parser_change(s: PAVCodecParserContext;
+-                   avctx: PAVCodecContext;
+-                   poutbuf: PPointer; poutbuf_size: PCint;
+-                   buf: {const} PByteArray; buf_size: cint; keyframe: cint): cint;
++                 avctx: PAVCodecContext;
++                 poutbuf: PPointer; poutbuf_size: PCint;
++                 buf: {const} PByteArray; buf_size: cint; keyframe: cint): cint;
+   cdecl; external av__codec;
+ procedure av_parser_close(s: PAVCodecParserContext);
+   cdecl; external av__codec;
+@@ -3434,20 +3801,20 @@
+  * Copy image 'src' to 'dst'.
+  *)
+ procedure av_picture_copy(dst: PAVPicture; src: {const} PAVPicture;
+-              pix_fmt: cint; width: cint; height: cint);
++              pix_fmt: TAVPixelFormat; width: cint; height: cint);
+   cdecl; external av__codec;
+ 
+ (**
+  * Crop image top and left side.
+  *)
+ function av_picture_crop(dst: PAVPicture; src: {const} PAVPicture;
+-             pix_fmt: cint; top_band: cint; left_band: cint): cint;
++             pix_fmt: TAVPixelFormat; top_band: cint; left_band: cint): cint;
+   cdecl; external av__codec;
+ 
+ (**
+  * Pad image.
+  *)
+-function av_picture_pad(dst: PAVPicture; src: {const} PAVPicture; height: cint; width: cint; pix_fmt: cint;
++function av_picture_pad(dst: PAVPicture; src: {const} PAVPicture; height: cint; width: cint; pix_fmt: TAVPixelFormat;
+             padtop: cint; padbottom: cint; padleft: cint; padright: cint; color: PCint): cint;
+   cdecl; external av__codec;
+ {$IFEND}
+@@ -3499,7 +3866,7 @@
+  *
+  * @return 0 in case of a successful parsing, a negative value otherwise
+  * @param[in] str the string to parse: it has to be a string in the format
+- * <frame_rate_nom>/<frame_rate_den>, a float number or a valid video rate abbreviation
++ * <frame_rate_num>/<frame_rate_den>, a float number or a valid video rate abbreviation
+  * @param[in,out] frame_rate pointer to the AVRational which will contain the detected
+  * frame rate
+  *)
+@@ -3518,11 +3885,13 @@
+   EDOM   = ESysEDOM;
+   ENOSYS = ESysENOSYS;
+   EILSEQ = ESysEILSEQ;
++  EPIPE  = ESysEPIPE;
+ {$ELSE}
+   ENOENT = 2;
+   EIO    = 5;
+   ENOMEM = 12;
+   EINVAL = 22;
++  EPIPE  = 32;
+   EDOM   = 33;
+   {$IFDEF MSWINDOWS}
+   // Note: we assume that ffmpeg was compiled with MinGW.
+@@ -3559,11 +3928,27 @@
+   AVERROR_NOMEM       = AVERROR_SIGN * ENOMEM;  (**< not enough memory *)
+   AVERROR_NOFMT       = AVERROR_SIGN * EILSEQ;  (**< unknown format *)
+   AVERROR_NOTSUPP     = AVERROR_SIGN * ENOSYS;  (**< Operation not supported. *)
+-  AVERROR_NOENT       = AVERROR_SIGN * ENOENT;  {**< No such file or directory. *}
++  AVERROR_NOENT       = AVERROR_SIGN * ENOENT;  (**< No such file or directory. *)
++  AVERROR_EOF         = AVERROR_SIGN * EPIPE;   (**< End of file. *)
+   // Note: function calls as constant-initializers are invalid
+   //AVERROR_PATCHWELCOME = -MKTAG('P','A','W','E'); {**< Not yet implemented in FFmpeg. Patches welcome. *}
+   AVERROR_PATCHWELCOME = -(ord('P') or (ord('A') shl 8) or (ord('W') shl 16) or (ord('E') shl 24));
+ 
++
++(**
++ * Registers the hardware accelerator \p hwaccel.
++ *)
++procedure av_register_hwaccel (hwaccel: PAVHWAccel)
++	cdecl; external av__codec;
++
++(**
++ * If hwaccel is NULL, returns the first registered hardware accelerator,
++ * if hwaccel is non-NULL, returns the next registered hardware accelerator
++ * after hwaccel, or NULL if hwaccel is the last one.
++ *)
++function av_hwaccel_next (hwaccel: PAVHWAccel): PAVHWAccel;
++    cdecl; external av__codec;
++
+ implementation
+ 
+ end.
+Index: src/lib/ffmpeg/avutil.pas
+===================================================================
+--- src/lib/ffmpeg/avutil.pas	(Revision 1657)
++++ src/lib/ffmpeg/avutil.pas	(Arbeitskopie)
+@@ -29,7 +29,7 @@
+  *
+  * libavutil/avutil.h:
+  *  Min. version: 49.0.1, revision 6577,  Sat Oct 7 15:30:46 2006 UTC
+- *  Max. version: 49.14.0, revision 16912, Sun Feb 1 02:00:19 2009 UTC 
++ *  Max. version: 50.2.0, revision 18286, Tue Mar 31 22:29:24 2009 UTC 
+  *
+  * libavutil/mem.h:
+  *  revision 16590, Tue Jan 13 23:44:16 2009 UTC 
+@@ -62,8 +62,8 @@
+ 
+ const
+   (* Max. supported version by this header *)
+-  LIBAVUTIL_MAX_VERSION_MAJOR   = 49;
+-  LIBAVUTIL_MAX_VERSION_MINOR   = 14;
++  LIBAVUTIL_MAX_VERSION_MAJOR   = 50;
++  LIBAVUTIL_MAX_VERSION_MINOR   = 2;
+   LIBAVUTIL_MAX_VERSION_RELEASE = 0;
+   LIBAVUTIL_MAX_VERSION = (LIBAVUTIL_MAX_VERSION_MAJOR * VERSION_MAJOR) +
+                           (LIBAVUTIL_MAX_VERSION_MINOR * VERSION_MINOR) +

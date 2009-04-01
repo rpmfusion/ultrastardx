@@ -1,8 +1,8 @@
-%define prever 20090303
+%define prever 20090331
 
 Name:           ultrastardx
 Version:        1.1.1
-Release:        1%{?prever:.5.%{prever}}%{?dist}
+Release:        1%{?prever:.6.%{prever}}%{?dist}
 Summary:        Karaoke game inspired by a popular commercial karaoke game
 
 Group:          Amusements/Games
@@ -14,6 +14,7 @@ Source1:        ultrastardx-32x32.png
 Source2:        ultrastardx-256x256.png
 Source100:      ultrastardx-snapshot.sh
 Patch0:         ultrastardx-desktop.patch
+Patch1:         ultrastardx-ffmpeg-headers.patch
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
 Requires:       bitstream-vera-sans-fonts gnu-free-sans-fonts
@@ -32,6 +33,7 @@ depending on the pitch of the voice and the rhythm of singing.
 %prep
 %setup -q -n %{name}%{?prever:-%{prever}}
 %patch0 -p1
+%patch1
 
 # replace the font paths with Fedora's own
 sed -i 's|File=|File=%{_datadir}/fonts/|g' game/fonts/fontsTTF.ini
@@ -92,6 +94,9 @@ fi
 
 
 %changelog
+* Wed Apr 01 2009 Felix Kaechele <felix at fetzig dot org> - 1.1.1-1.6.20090331
+- new snapshot and reworked ffmpeg headers
+
 * Tue Mar 31 2009 Felix Kaechele <felix at fetzig dot org> - 1.1.1-1.5.20090303
 - fixed font deps
 
