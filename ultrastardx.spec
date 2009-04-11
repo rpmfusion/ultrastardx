@@ -1,8 +1,8 @@
-%define prever 20090331
+%define prever 20090411
 
 Name:           ultrastardx
 Version:        1.1.1
-Release:        1%{?prever:.6.%{prever}}%{?dist}
+Release:        1%{?prever:.7.%{prever}}%{?dist}
 Summary:        Karaoke game inspired by a popular commercial karaoke game
 
 Group:          Amusements/Games
@@ -40,9 +40,9 @@ sed -i 's|File=|File=%{_datadir}/fonts/|g' game/fonts/fontsTTF.ini
 sed -i 's|FreeSans|freefont/FreeSans|g' game/fonts/fontsTTF.ini
 sed -i 's|Vera|bitstream-vera/Vera|g' game/fonts/fontsTTF.ini
 
-iconv -f iso-8859-1 -t utf-8 ChangeLog.german.txt > ChangeLog.german.txt.utf-8
-touch -r ChangeLog.german.txt ChangeLog.german.txt.utf-8
-mv ChangeLog.german.txt.utf-8 ChangeLog.german.txt
+iconv -f iso-8859-1 -t utf-8 ChangeLog.GERMAN.txt > ChangeLog.GERMAN.txt.utf-8
+touch -r ChangeLog.GERMAN.txt ChangeLog.GERMAN.txt.utf-8
+mv ChangeLog.GERMAN.txt.utf-8 ChangeLog.GERMAN.txt
 
 tr -d \\r < COPYRIGHT.txt > COPYRIGHT.txt.unix
 touch -r COPYRIGHT.txt COPYRIGHT.txt.unix
@@ -94,6 +94,10 @@ fi
 
 
 %changelog
+* Sat Apr 11 2009 Felix Kaechele <felix at fetzig dot org> - 1.1.1-1.7.20090411
+- new snapshot
+- fixed typos
+
 * Wed Apr 01 2009 Felix Kaechele <felix at fetzig dot org> - 1.1.1-1.6.20090331
 - new snapshot and reworked ffmpeg headers
 
