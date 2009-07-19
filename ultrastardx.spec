@@ -1,8 +1,8 @@
-%define prever 20090411
+%define prever 20090719
 
 Name:           ultrastardx
 Version:        1.1.1
-Release:        1%{?prever:.7.%{prever}}%{?dist}
+Release:        1%{?prever:.8.%{prever}}%{?dist}
 Summary:        Karaoke game inspired by a popular commercial karaoke game
 
 Group:          Amusements/Games
@@ -14,7 +14,6 @@ Source1:        ultrastardx-32x32.png
 Source2:        ultrastardx-256x256.png
 Source100:      ultrastardx-snapshot.sh
 Patch0:         ultrastardx-desktop.patch
-Patch1:         ultrastardx-ffmpeg-headers.patch
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
 Requires:       bitstream-vera-sans-fonts gnu-free-sans-fonts
@@ -33,7 +32,6 @@ depending on the pitch of the voice and the rhythm of singing.
 %prep
 %setup -q -n %{name}%{?prever:-%{prever}}
 %patch0 -p1
-%patch1
 
 # replace the font paths with Fedora's own
 sed -i 's|File=|File=%{_datadir}/fonts/|g' game/fonts/fontsTTF.ini
@@ -50,7 +48,7 @@ mv COPYRIGHT.txt.unix COPYRIGHT.txt
 
 %build
 %configure --with-libprojectM=nocheck libprojectM_VERSION=$(pkg-config --modversion libprojectM) libprojectM_INCLUDEDIR="/usr/include" libprojectM_DATADIR="/usr/share/projectM"
-make %{?_smp_mflags}
+make %{?_smp_mflags} PFLAGS_EXTRA="-fPIC"
 
 
 %install
@@ -94,6 +92,10 @@ fi
 
 
 %changelog
+* Sun Jul 19 2009 Felix Kaechele <heffer@fedoraproject.org> - 1.1.1-1.8.20090719
+- new snapshot
+- party mode works again, tested it today :)
+
 * Sat Apr 11 2009 Felix Kaechele <felix at fetzig dot org> - 1.1.1-1.7.20090411
 - new snapshot
 - fixed typos
