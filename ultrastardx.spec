@@ -2,7 +2,7 @@
 
 Name:           ultrastardx
 Version:        1.1.1
-Release:        1%{?prever:.8.%{prever}}%{?dist}
+Release:        2%{?prever:.8.%{prever}}%{?dist}
 Summary:        Karaoke game inspired by a popular commercial karaoke game
 
 Group:          Amusements/Games
@@ -92,6 +92,9 @@ fi
 
 
 %changelog
+* Wed Oct 21 2009 Thorsten Leemhuis <fedora [AT] leemhuis [DOT] info> - 1.1.1-2.8.20090719
+- rebuild for new ffmpeg
+
 * Sun Jul 19 2009 Felix Kaechele <heffer@fedoraproject.org> - 1.1.1-1.8.20090719
 - new snapshot
 - party mode works again, tested it today :)
