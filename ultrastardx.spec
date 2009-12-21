@@ -1,22 +1,24 @@
-%define prever 20090719
+%define prever r2052
 
 Name:           ultrastardx
 Version:        1.1.1
-Release:        1%{?prever:.8.%{prever}}%{?dist}
+Release:        1%{?prever:.9.%{prever}}%{?dist}
 Summary:        Karaoke game inspired by a popular commercial karaoke game
 
 Group:          Amusements/Games
 License:        GPLv2+
 URL:            http://www.ultrastardeluxe.org
 # Source0: svn snapshot; use supplied ultrastardx-snapshot.sh to get one
-Source0:        ultrastardx%{?prever:-%{prever}}.tar.lzma
-Source1:        ultrastardx-32x32.png
-Source2:        ultrastardx-256x256.png
-Source100:      ultrastardx-snapshot.sh
-Patch0:         ultrastardx-desktop.patch
+Source0:        %{name}%{?prever:-%{prever}}.tar.xz
+Source1:        %{name}-32x32.png
+Source2:        %{name}-256x256.png
+Source100:      %{name}-snapshot.sh
+Patch0:         %{name}-desktop.patch
+# This changes the font path to Liberation fonts
+Patch1:         %{name}-fonts.ini-fedora.patch
 BuildRoot:      %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 
-Requires:       bitstream-vera-sans-fonts gnu-free-sans-fonts
+Requires:       liberation-sans-fonts
 
 BuildRequires:  fpc desktop-file-utils 
 BuildRequires:  ffmpeg-devel freetype-devel libpng-devel libprojectM-devel 
@@ -32,19 +34,11 @@ depending on the pitch of the voice and the rhythm of singing.
 %prep
 %setup -q -n %{name}%{?prever:-%{prever}}
 %patch0 -p1
-
-# replace the font paths with Fedora's own
-sed -i 's|File=|File=%{_datadir}/fonts/|g' game/fonts/fontsTTF.ini
-sed -i 's|FreeSans|freefont/FreeSans|g' game/fonts/fontsTTF.ini
-sed -i 's|Vera|bitstream-vera/Vera|g' game/fonts/fontsTTF.ini
+%patch1 -p1
 
 iconv -f iso-8859-1 -t utf-8 ChangeLog.GERMAN.txt > ChangeLog.GERMAN.txt.utf-8
 touch -r ChangeLog.GERMAN.txt ChangeLog.GERMAN.txt.utf-8
 mv ChangeLog.GERMAN.txt.utf-8 ChangeLog.GERMAN.txt
-
-tr -d \\r < COPYRIGHT.txt > COPYRIGHT.txt.unix
-touch -r COPYRIGHT.txt COPYRIGHT.txt.unix
-mv COPYRIGHT.txt.unix COPYRIGHT.txt
 
 %build
 %configure --with-libprojectM=nocheck libprojectM_VERSION=$(pkg-config --modversion libprojectM) libprojectM_INCLUDEDIR="/usr/include" libprojectM_DATADIR="/usr/share/projectM"
@@ -62,6 +56,8 @@ install -Dpm 644 %{SOURCE1} \
 install -Dpm 644 %{SOURCE2} \
   $RPM_BUILD_ROOT%{_datadir}/icons/hicolor/256x256/apps/%{name}.png
 
+# only used for UTF-8 unaware systems
+rm $RPM_BUILD_ROOT%{_datadir}/%{name}/languages/convert.sh
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -84,7 +80,7 @@ fi
 %files
 %defattr(-,root,root,-)
 %doc AUTHORS.txt ChangeLog.GERMAN.txt ChangeLog.txt COPYING.txt COPYRIGHT.txt
-%doc README.txt
+%doc README.txt RELEASEBLOCKERS.txt
 %{_bindir}/%{name}
 %{_datadir}/%{name}
 %{_datadir}/applications/*.desktop
@@ -92,6 +88,12 @@ fi
 
 
 %changelog
+* Mon Dec 21 2009 Felix Kaechele <heffer@fedoraproject.org> - 1.1.1-1.9.r2052
+- new snapshot
+- now builds on F12 again
+- improved specfile
+- improved ultrastardx-snapshot.sh
+
 * Sun Jul 19 2009 Felix Kaechele <heffer@fedoraproject.org> - 1.1.1-1.8.20090719
 - new snapshot
 - party mode works again, tested it today :)
