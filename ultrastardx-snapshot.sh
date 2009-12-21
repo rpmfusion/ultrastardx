@@ -12,22 +12,23 @@ cleanup() {
 
 unset CDPATH
 pwd=$(pwd)
-svn=$(date +%Y%m%d)
+
 
 cd "$tmp"
+svnpath=https://ultrastardx.svn.sourceforge.net/svnroot/ultrastardx/trunk
+svn=`svn info $svnpath | grep Revision | awk '{print $2}'`
 
-svn checkout -r {$svn} https://ultrastardx.svn.sourceforge.net/svnroot/ultrastardx/trunk ultrastardx-$svn
+svn export $svnpath  ultrastardx-r$svn
 
-cd ultrastardx-$svn
-find . -type d -name .svn -print0 | xargs -0r rm -rf
+cd ultrastardx-r$svn
 # remove installer stuff as it's not needed for linux
 rm -rf installer*
 # remove precompiled stuff
 find . -name *.res -exec rm -rf {} \;
 # remove fonts, fedora has it's own
-find game/fonts/ -name *.ttf -exec rm -rf {} \;
+rm -rf game/fonts/DejaVu game/fonts/FreeSans
 cd ..
 
-tar --lzma -cf "$pwd"/ultrastardx-$svn.tar.lzma ultrastardx-$svn
+tar --xz -cf "$pwd"/ultrastardx-r$svn.tar.xz ultrastardx-r$svn
 
 cd - >/dev/null
