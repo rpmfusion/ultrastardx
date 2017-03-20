@@ -2,7 +2,7 @@
 
 Name:           ultrastardx
 Version:        1.1.1
-Release:        2%{?prever:.9.%{prever}}%{?dist}
+Release:        3%{?prever:.9.%{prever}}%{?dist}
 Summary:        Karaoke game inspired by a popular commercial karaoke game
 
 Group:          Amusements/Games
@@ -88,6 +88,9 @@ fi
 
 
 %changelog
+* Mon Mar 20 2017 RPM Fusion Release Engineering <kwizart@rpmfusion.org> - 1.1.1-3.9.r2052
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_26_Mass_Rebuild
+
 * Mon Dec 21 2009 Felix Kaechele <heffer@fedoraproject.org> - 1.1.1-2.9.r2052
 - new snapshot
 - now builds on F12 again
